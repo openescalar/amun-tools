@@ -1,0 +1,118 @@
+#!/usr/bin/env ruby
+if RUBY_VERSION.to_f <= 1.8
+  require 'rubygems'
+end
+require 'RRD'
+require 'rexml/document'
+rrddir = '/var/lib/collectd/'
+pngdir = '/opt/openescalar/monitoring/'
+
+ptime = ""
+namet = ARGV[0].to_s
+case namet
+  when "5min"
+    ptime = "-300"
+  when "30min"
+    ptime = "-1800"
+  when "hour"
+    ptime = "-1h"
+  when "day"
+    ptime = "-1d"
+  when "week"
+    ptime = "-1w"
+  when "month"
+    ptime = "-1m"
+  when "year"
+    ptime = "-1y"
+  else
+    ptime = "-300"
+    namet = "5min"
+end
+
+hosts = Array.new
+
+Dir.entries(rrddir).each { |h| hosts << h if not ( h == "." or h == ".." ) }
+
+hosts.each do |h|
+  Dir.entries(rrddir + "/" + h).each do |c| 
+    if not ( c == "." or c == ".." ) 
+      title = c + " Graph"
+      area  = ""
+      datas = ""
+      g = true
+      case c
+	when /cpu\-0/
+         xn = "cpu"
+         area  = "AREA:aa#0000FF:system"
+         xport  = "XPORT:aa:system"
+         datas = "DEF:aa=#{rrddir}/#{h}/#{c}/cpu-system.rrd:value:AVERAGE"
+#	when /disk/
+#         area  = "AREA:aa#0000FF:ops"
+#         datas = "DEF:aa=#{rrddir}/#{h}/#{c}/disk_ops.rrd:write:AVERAGE"
+#	when /interface/
+#         area  = "AREA:aa#0000FF:packets"
+#         datas = "DEF:aa=#{rrddir}/#{h}/#{c}/if_packets-eth0.rrd:tx:AVERAGE"
+	when /load/
+         xn = "load"
+         area  = "AREA:aa#0000FF:load(shortterm)"
+         xport  = "XPORT:aa:load-shortterm"
+         datas = "DEF:aa=#{rrddir}/#{h}/#{c}/load.rrd:shortterm:AVERAGE"
+	when /memory/
+         xn = "memory"
+         area  = "AREA:aa#0000FF:used"
+         xport  = "XPORT:aa:used"
+         datas = "DEF:aa=#{rrddir}/#{h}/#{c}/memory-used.rrd:value:AVERAGE"
+#	when /processes\-running/
+#         xn = "process"
+#         area  = "AREA:aa#0000FF:running"
+#         xport  = "XPORT:aa:running"
+#         datas = "DEF:aa=#{rrddir}/#{h}/#{c}/ps_state-running.rrd:value:AVERAGE"
+#	when /users/
+#         xn = "users"
+#         area  = "AREA:aa#0000FF:users"
+#         xport  = "XPORT:aa:users"
+#         datas = "DEF:aa=#{rrddir}/#{h}/#{c}/users.rrd:users:AVERAGE"
+        else 
+          g = false
+      end
+      RRD.graph( "#{pngdir}#{h}-#{c}-#{namet}.png", "--title", " #{title}", "--start", "#{ptime}", "--imgformat", "PNG", "#{datas}", "#{area}" ) if g
+      if g
+        case namet
+          when "5min"
+      		a = REXML::Document.new(`rrdtool xport --start -3600 #{datas} #{xport}`.gsub(/\/n/,'').gsub(/>\s+</,'><').to_s) if g
+      		File.open("#{pngdir}#{h}-#{c}-hour.js","w") {|file| file.puts "var #{xn}hour = [" ; a.root.elements[2].each {|n| file.puts "[#{n[0].text}000,#{n[1].text.to_f}],"} ; file.puts "];" } if g
+	  when "day"
+		31.times do |tp|
+		  stime = 31 - tp 
+		  ftime = 31 - (tp + 1)
+                  if tp == 0
+                    File.open("#{pngdir}#{h}-#{c}-month.js","w") {|file| file.puts "var #{xn}month = [" ; REXML::Document.new(`rrdtool xport --start -#{stime.to_s}d --end -#{ftime.to_s}d #{datas} #{xport}`.gsub(/\/n/,'').gsub(/>\s+</,'><').to_s).root.elements[2].each {|n| file.puts "[#{n[0].text}000,#{n[1].text.to_f}],"}  } if g
+ 		  elsif tp == 30
+                    File.open("#{pngdir}#{h}-#{c}-month.js","a") {|file| REXML::Document.new(`rrdtool xport --start -#{stime.to_s}d --end -#{ftime.to_s}d #{datas} #{xport}`.gsub(/\/n/,'').gsub(/>\s+</,'><').to_s).root.elements[2].each {|n| file.puts "[#{n[0].text}000,#{n[1].text.to_f}],"} ; file.puts "];" } if g
+                  else
+         	    File.open("#{pngdir}#{h}-#{c}-month.js","a") {|file| REXML::Document.new(`rrdtool xport --start -#{stime.to_s}d --end -#{ftime.to_s}d #{datas} #{xport}`.gsub(/\/n/,'').gsub(/>\s+</,'><').to_s).root.elements[2].each {|n| file.puts "[#{n[0].text}000,#{n[1].text.to_f}],"} } if g
+                  end
+                end
+          when "month"
+                12.times do |tp|
+                  stime = 12 - tp
+                  ftime = 12 - (tp + 1)
+                  if tp == 0
+                    File.open("#{pngdir}#{h}-#{c}-year.js","w") {|file| file.puts "var #{xn}year = [" ; REXML::Document.new(`rrdtool xport --start -#{stime.to_s}month --end -#{ftime.to_s}month #{datas} #{xport}`.gsub(/\/n/,'').gsub(/>\s+</,'><').to_s).root.elements[2].each {|n| file.puts "[#{n[0].text}000,#{n[1].text.to_f}],"}  } if g
+                  elsif tp == 11
+                    File.open("#{pngdir}#{h}-#{c}-year.js","a") {|file| REXML::Document.new(`rrdtool xport --start -#{stime.to_s}month --end -#{ftime.to_s}month #{datas} #{xport}`.gsub(/\/n/,'').gsub(/>\s+</,'><').to_s).root.elements[2].each {|n| file.puts "[#{n[0].text}000,#{n[1].text.to_f}],"} ; file.puts "];" } if g
+                  else
+                    File.open("#{pngdir}#{h}-#{c}-year.js","a") {|file| REXML::Document.new(`rrdtool xport --start -#{stime.to_s}month --end -#{ftime.to_s}month #{datas} #{xport}`.gsub(/\/n/,'').gsub(/>\s+</,'><').to_s).root.elements[2].each {|n| file.puts "[#{n[0].text}000,#{n[1].text.to_f}],"} } if g
+                  end
+                end
+
+        end 
+      end
+#      a = REXML::Document.new(`rrdtool xport --start #{ptime} #{datas} #{xport}`.gsub(/\/n/,'').gsub(/>\s+</,'><').to_s) if g
+#      File.open("#{pngdir}#{h}-#{c}-#{namet}.js","w") {|file| file.puts "var #{xn} = [" ; a.root.elements[2].each {|n| file.puts "[#{n[0].text}000,#{n[1].text.to_f}],"} ; file.puts "];" } if g
+    end
+  end
+end
+
+
+

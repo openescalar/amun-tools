@@ -1,0 +1,6 @@
+*/3 * * * * /opt/openescalar/amun-tools/bin/grapher-cron 5min
+*/5 * * * * /opt/openescalar/amun-tools/bin/grapher-cron 30min
+0 * * * * /opt/openescalar/amun-tools/bin/grapher-cron hour
+0 0 * * * /opt/openescalar/amun-tools/bin/grapher-cron day
+0 0 * * 0 /opt/openescalar/amun-tools/bin/grapher-cron week
+0 0 1 * * /opt/openescalar/amun-tools/bin/grapher-cron month

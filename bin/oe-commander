@@ -1,0 +1,78 @@
+#!/usr/bin/env ruby
+if RUBY_VERSION.to_f <= 1.8
+  require 'rubygems'
+end
+require '/opt/openescalar/amun-tools/lib/commander.rb'
+
+def getPids
+  o = Array.new
+  if File.exists?('/var/run/oe-commander.pid')
+    File.open('/var/run/oe-commander.pid','r') do |infile|
+      while (line=infile.gets)
+        begin
+          Process.getpgid(line.to_i)
+          o << line.to_i
+        rescue Errno::ESRCH
+        end
+      end
+     end
+   end
+  return o
+end
+
+def writePids(a)
+  f = File.open('/var/run/oe-commander.pid','w')
+  a.each do |pido| 
+    f.puts pido.to_s
+  end
+  f.close
+end
+
+def startCommander
+  a = Array.new
+  o = getPids
+  $0 = 'oe-commander'
+  a << fork {
+    Process.setsid
+    c = Commander.new
+    trap("USR1") { c.stop; exit; }
+    c.start
+    while true
+      sleep 1
+    end
+  }
+  a.concat(o)
+  writePids(a)
+  a.each do |pido| 
+    Process.detach(pido)
+  end
+end
+
+def stopCommander
+  a = getPids
+  if not a
+    return false
+  end
+  a.each do |pido|
+    begin
+      Process.kill("USR1",pido.to_i)
+    rescue Errno::ECHILD => e
+      puts e.inspect
+    end
+  end
+  begin
+    File.delete('/var/run/oe-commander.pid')
+  rescue
+  end
+end
+
+case ARGV[0]
+  when "start"
+    startCommander
+  when "stop"
+    stopCommander
+  else
+    puts "Usage: oe-commander <start|stop>"
+end
+
+

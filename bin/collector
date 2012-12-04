@@ -1,0 +1,49 @@
+#!/usr/bin/env ruby
+if RUBY_VERSION.to_f <= 1.8
+  require 'rubygems'
+end
+require 'syslog'
+require 'yaml'
+require 'zmq'
+
+  def log(message)
+    Syslog.open($0, Syslog::LOG_PID | Syslog::LOG_CONS) { |s| s.warning message }
+  end
+
+data = ""
+ARGF.each do |line|
+  data += line
+end 
+  
+begin
+  contxt = ZMQ::Context.new
+  toComm = contxt.socket(ZMQ::DOWNSTREAM)
+  log("Connecting to Commander")
+  toComm.connect("tcp://*:22347")
+  log("Connected to Commander")
+rescue 
+  log("Error connecting to Commander")
+end
+
+begin
+  y = YAML.load(data)
+  log("Creating escalar message")
+  msg = { :action => "escalar", :serial => y["Host"] }.to_yaml
+  log("sending escalar " + msg )
+  toComm.send(msg)
+  log("Message sent to commander")
+rescue ZMQ::Error => e
+  log(e.inspect)
+rescue => e
+  log(e.inspect)
+end
+
+begin 
+  log("Clossing Connection to Commander")
+  toComm.close
+  log("Connection Closed")
+rescue
+  log("Error while closing connection to Commander")
+end
+
+

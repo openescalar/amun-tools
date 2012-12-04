@@ -1,0 +1,93 @@
+#!/usr/bin/env ruby
+$LOAD_PATH << '/opt/openescalar/amun-tools/lib'
+$LOAD_PATH << '/opt/openescalar/amun-tools/lib/amun/lib'
+$LOAD_PATH << '/opt/openescalar/amun-tools/lib/amun/app/models'
+
+if RUBY_VERSION.to_f <= 1.8
+  require 'rubygems'
+end
+require '/opt/openescalar/amun-tools/lib/worker.rb'
+
+def getPids
+ o = Array.new
+ if File.exists?('/var/run/oe-workers.pid')
+  File.open('/var/run/oe-workers.pid', 'r') do |infile|
+    while (line=infile.gets)
+      begin
+        Process.getpgid(line.to_i)
+	o << line.to_i
+      rescue Errno::ESRCH
+      end
+    end
+  end
+ end
+ return o
+end
+
+def writePids(a)
+  f = File.open('/var/run/oe-workers.pid','w')
+  a.each do |pido|
+    f.puts pido.to_s
+  end
+  f.close
+end
+
+def startWorker
+  a = Array.new
+  o = getPids
+  $0 = 'oe-dist'
+  procs = 3
+  if File.exists?('/opt/openescalar/amun-tools/conf/worker.conf')
+     procs = YAML.load_file('/opt/openescalar/amun-tools/conf/worker.conf')["worker"]["instances"]
+  end   
+  procs.times do 
+    a << fork {
+      Process.setsid
+      if ARGV[0].to_s == "debug"
+        w = Worker.new
+        w.dg = true
+      else
+        w = Worker.new
+      end
+      trap("USR1") { w.stop; exit; }
+      w.start
+      while true
+        sleep 1
+      end
+    }
+  end
+  a.concat(o)
+  writePids(a)
+  a.each do |pido|
+    Process.detach(pido)
+  end 
+end
+
+def stopWorker
+  a = getPids
+  if not a
+    return false
+  end
+  a.each do |pido|
+    begin
+      Process.kill("USR1",pido.to_i)
+    rescue Errno::ECHILD => e
+      puts e.inspect
+    end
+  end
+  begin
+    File.delete('/var/run/oe-workers.pid')
+  rescue
+  end
+end
+
+case ARGV[0]
+  when "start"
+    startWorker
+  when "stop"
+    stopWorker
+  when "debug"
+    startWorker
+  else
+    puts "Usage: oe-worker <start|stop|debug>"
+end
