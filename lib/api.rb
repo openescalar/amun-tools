@@ -52,6 +52,31 @@ get '/task' do
   end
 end
 
+get '/builder' do
+  act = db { Account.find_by_key(URI.unescape(params[:key])) } if params[:key]
+  log("API - Looking for key " + params[:key])
+  if act
+    log("API - got key for account - " + act.id.to_s)
+    if db { Oeencrypt::decryptQuery(params,act.secret,act.key) }
+      case URI.unescape(params[:action])
+        when "build"
+          log("Building server")
+	  contxt = ZMQ::Context.new
+          toCoor = contxt.socket(ZMQ::DOWNSTREAM)
+          toCoor.connect("tcp://*:12345")
+          srvserial = db { act.servers.find_by_serial(params[:serial]).serial }
+          if srvserial
+            msg = {:action => "build", :object => "server", :serial => srvserial }.to_yaml
+            toCoor.send(msg)
+          end
+          toCoor.close
+      end
+    else
+      log("API - Error on encryption")
+    end
+  end
+end
+
 get '/pingme' do
   act = db { Account.find_by_key(URI.unescape(params[:key])) } if params[:key]
   log("API - Looking for key " + params[:key])

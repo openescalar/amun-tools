@@ -83,6 +83,8 @@ class Worker
                 update(m)
 	     when "status"
 	        status(m)
+             when "build"
+                sendtask(m) 
              when "get"
                 get(m)
           end
@@ -341,6 +343,16 @@ class Worker
            db { k.destroy }
          end
     end
+  end
+
+  def sendtask(y)
+      case y[:object].to_s
+        when "server"
+        when "task"
+        when "role"
+        when "workflow"
+        when "deployment"
+      end
   end
   
   def get(y)
