@@ -211,29 +211,34 @@ class Worker
            k.private = kcloud.createkeypair
            db { k.save }
 	   log("Creating keypair under infrastructure #{i.name}")
+	   sleep 1
          end
          i.firewalls.each do |f|
            fcloud = Oecloud.new(:zone => f.zone, :key => f.zone.key, :secret => f.zone.secret, :firewall => f)
            f.serial = fcloud.createsecuritygroup
            db { f.save }
 	   log("Creating firewall under infrastructure #{i.name}")
+	   sleep 1
          end
          i.rules.each do |r|
            rcloud = Oecloud.new(:zone => r.firewall.zone, :key => r.firewall.zone.key, :secret => r.firewall.zone.secret, :firewall => r.firewall, :rule => r)
            db { r.destroy } if not rcloud.authorizedsecuritygroupingress
 	   log("Creating rule under infrastructure #{i.name}")
+	   sleep 1
          end
          i.volumes.each do |v|
            vcloud = Oecloud.new(:zone => v.zone, :key => v.zone.key, :secret => v.zone.secret, :volume => v)
            v.serial = vcloud.createvolume
            db { v.save } if v.serial
 	   log("Creating volume under infrastructure #{i.name}")
+	   sleep 1
          end
          i.servers.each do |s|
            scloud = Oecloud.new(:zone => s.zone, :key => s.zone.key, :secret => s.zone.secret, :image => s.image, :offer => s.offer, :firewall => s.firewall, :keypair => s.keypair, :server => s)
            s.serial = scloud.runinstances
            db { s.save } if s.serial
 	   log("Creating server under infrastructure #{i.name}")
+	   sleep 1
          end
     end
   end
@@ -330,28 +335,32 @@ class Worker
          i = db { Infrastructure.find(y[:objectid]) }
 	 log("Destroying resources of infrastructre #{i.name}")
          i.servers.each do |s|
-           scloud = Oecloud.new(:zone => s.zone, :key => s.zone.key, :secret => s.zone.secret, :image => s.image, :offer => s.offer, :firewall => s.firewall)
+           scloud = Oecloud.new(:zone => s.zone, :key => s.zone.key, :secret => s.zone.secret, :image => s.image, :offer => s.offer, :firewall => s.firewall, :server => s)
            scloud.terminateinstances
            db { s.destroy } 
-	 log("Destroying servers resources of infrastructre #{i.name}")
+	   log("Destroying servers resources of infrastructre #{i.name}")
+	   sleep 1
          end
          i.volumes.each do |v|
            vcloud = Oecloud.new(:zone => v.zone, :key => v.zone.key, :secret => v.zone.secret, :volume => v)
            vcloud.deletevolume
            db { v.destroy }
-	 log("Destroying volumes resources of infrastructre #{i.name}")
+	   log("Destroying volumes resources of infrastructre #{i.name}")
+	   sleep 1
          end
          i.firewalls.each do |f|
            fcloud = Oecloud.new(:zone => f.zone, :key => f.zone.key, :secret => f.zone.secret, :firewall => f)
            fcloud.deletesecuritygroup
            db { f.destroy }
-	 log("Destroying firewalls resources of infrastructre #{i.name}")
+	   log("Destroying firewalls resources of infrastructre #{i.name}")
+	   sleep 1
          end
          i.keypairs.each do |k|
            kcloud = Oecloud.new(:zone => k.zone, :key => k.zone.key, :secret => k.zone.secret, :keypair => k)
            kcloud.deletekeypair
            db { k.destroy }
-	 log("Destroying keypair resources of infrastructre #{i.name}")
+	   log("Destroying keypair resources of infrastructre #{i.name}")
+	   sleep 1
          end
     end
   end
