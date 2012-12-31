@@ -1,4 +1,4 @@
-#!/usr/bin/env ruby
+#!/opt/ruby/bin/ruby
 $LOAD_PATH << '/opt/openescalar/amun-tools/lib'
 $LOAD_PATH << '/opt/openescalar/amun-tools/lib/amun/lib'
 $LOAD_PATH << '/opt/openescalar/amun-tools/lib/amun/app/models'

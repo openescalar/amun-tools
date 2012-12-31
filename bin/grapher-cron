@@ -2,9 +2,9 @@
 if RUBY_VERSION.to_f <= 1.8
   require 'rubygems'
 end
-require 'RRD'
+#require 'RRD'
 require 'rexml/document'
-rrddir = '/var/lib/collectd/'
+rrddir = '/var/lib/collectd/rrd'
 pngdir = '/opt/openescalar/monitoring/'
 
 ptime = ""
@@ -75,7 +75,7 @@ hosts.each do |h|
         else 
           g = false
       end
-      RRD.graph( "#{pngdir}#{h}-#{c}-#{namet}.png", "--title", " #{title}", "--start", "#{ptime}", "--imgformat", "PNG", "#{datas}", "#{area}" ) if g
+#      RRD.graph( "#{pngdir}#{h}-#{c}-#{namet}.png", "--title", " #{title}", "--start", "#{ptime}", "--imgformat", "PNG", "#{datas}", "#{area}" ) if g
       if g
         case namet
           when "5min"

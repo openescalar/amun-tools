@@ -1,4 +1,4 @@
-#!/usr/bin/env ruby
+#!/opt/ruby/bin/ruby
 if RUBY_VERSION.to_f <= 1.8
   require 'rubygems'
 end
