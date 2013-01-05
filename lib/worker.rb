@@ -283,10 +283,10 @@ class Worker
 	   again = true
 	   begin
              rcloud = Oecloud.new(:zone => r.firewall.zone, :key => r.firewall.zone.key, :secret => r.firewall.zone.secret, :firewall => r.firewall, :rule => r)
-	     r = rcloud.authorizedsecuritygroupingress
+	     rl = rcloud.authorizedsecuritygroupingress
  	   rescue => e
 	     if again
-		r = false
+		rl = false
 		again = false
 		sleep 3
 		retry
@@ -294,7 +294,7 @@ class Worker
 		raise
 	     end
 	   end
-	   if r
+	   if rl
 	     db { r.save } 
 	     log("Creating rule under infrastructure #{i.name}")
 	   else
