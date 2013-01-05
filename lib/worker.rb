@@ -117,8 +117,6 @@ class Worker
              again = false
              sleep 3
              retry
-          else
-             raise
           end
         end
         if s.serial 
@@ -140,8 +138,6 @@ class Worker
              again = false
              sleep 3
              retry
-          else
-             raise
           end
         end
         if f.serial
@@ -163,8 +159,6 @@ class Worker
              again = false
              sleep 3
              retry
-          else
-             raise
           end
         end
         if v.serial
@@ -191,8 +185,6 @@ class Worker
              again = false
              sleep 3 
              retry
-          else
-             raise
           end
         end
         if not rserial
@@ -215,8 +207,6 @@ class Worker
               again = false
               sleep 3
               retry 
-           else
-              raise
            end
          end
          if k.private 
@@ -242,8 +232,6 @@ class Worker
                 again = false
 		sleep 3
 		retry
-	     else
-                raise
 	     end
            end
 	   if k.private 
@@ -266,8 +254,6 @@ class Worker
 		again = false
 		sleep 3
 		retry
-	     else
-		raise
 	     end
 	   end
 	   if f.serial
@@ -290,8 +276,6 @@ class Worker
 		again = false
 		sleep 3
 		retry
-	     else
-		raise
 	     end
 	   end
 	   if rl
@@ -314,8 +298,6 @@ class Worker
 		again = false
 		sleep 3
 		retry
-	     else
-		raise
 	     end
 	   end
 	   if v.serial
@@ -338,8 +320,6 @@ class Worker
 		again = false
 		sleep 3
 		retry
-	     else
-		raise
 	     end
 	   end
 	   if s.serial
@@ -359,25 +339,50 @@ class Worker
     case y[:object]
       when "server"
         s = db { Server.find(y[:objectid]) }
-        scloud = Oecloud.new(:zone => s.zone, :key => s.zone.key, :secret => s.zone.secret, :server => s)
-        case y[:actobject]
-          when "start"
-              status = scloud.startinstances
-          when "stop"
-	      status = scloud.stopinstances
-        end
+	again = true
+        preStat = s.status
+        begin
+          scloud = Oecloud.new(:zone => s.zone, :key => s.zone.key, :secret => s.zone.secret, :server => s)
+          case y[:actobject]
+            when "start"
+                status = scloud.startinstances
+            when "stop"
+	        status = scloud.stopinstances
+          end
+        rescue => e
+	  if again
+	     status = nil
+	     again = false
+	     sleep 3
+	     retry
+	  end
+	end
         if status
            s.status = status
            db { s.save }
+           log("Moving instance from status #{preStat} to #{status}")
+        else
+           s.status = preStat
+           db { s.save }
+           log("Couldn't move instance to new status leaving in old #{preStat}")
         end
       when "volume"
           v = db { Volume.find(y[:objectid]) }
-        vcloud = Oecloud.new(:zone => v.zone, :key => v.zone.key, :secret => v.zone.secret, :volume => v, :server => v.server )
-        case y[:actobject]
-          when "attach"
-             vol = vcloud.attachevolume
-          when "dettach"
-             vol = vcloud.detachvolume
+        again = true
+	begin
+          vcloud = Oecloud.new(:zone => v.zone, :key => v.zone.key, :secret => v.zone.secret, :volume => v, :server => v.server )
+          case y[:actobject]
+            when "attach"
+               vol = vcloud.attachevolume
+            when "dettach"
+               vol = vcloud.detachvolume
+          end
+	rescue => e
+	  if again
+	     again = false
+	     sleep 3
+	     retry
+	  end
         end
         if vol 
            db { v.save }
@@ -397,80 +402,171 @@ class Worker
     case y[:object]
       when "server"
         s = db { Server.find(y[:objectid]) }
-        scloud = Oecloud.new(:zone => s.zone, :key => s.zone.key, :secret => s.zone.secret, :server => s)
-        if scloud.terminateinstances
-          log("destroying " + s.id.to_s)
-          db { s.destroy }
-        end
+        again = true
+	begin
+          scloud = Oecloud.new(:zone => s.zone, :key => s.zone.key, :secret => s.zone.secret, :server => s)
+          if scloud.terminateinstances
+            log("destroying " + s.id.to_s)
+            db { s.destroy }
+          end
+	rescue => e
+	   if again
+	      again = false
+	      sleep 3 
+	      retry
+	   end
+	end
+
       when "firewall"
         f = db { Firewall.find(y[:objectid]) }
-        fcloud = Oecloud.new(:zone => f.zone, :key => f.zone.key, :secret => f.zone.secret, :firewall => f)
-        if fcloud.deletesecuritygroup
-          log("destroying " + f.id.to_s)
-          db { f.destroy }
+        again = true
+        begin 
+          fcloud = Oecloud.new(:zone => f.zone, :key => f.zone.key, :secret => f.zone.secret, :firewall => f)
+          if fcloud.deletesecuritygroup
+            log("destroying " + f.id.to_s)
+            db { f.destroy }
+          end
+        rescue => e
+          if again
+             again = false
+             sleep 3
+             retry
+          end
         end
       when "volume"
         v = db { Volume.find(y[:objectid]) } 
-        vcloud = Oecloud.new(:zone => v.zone, :key => v.zone.key, :secret => v.zone.secret, :volume => v)
-        if vcloud.deletevolume
-          log("destroying " + v.id.to_s)
-           db { v.destroy }
+        again = true
+        begin
+          vcloud = Oecloud.new(:zone => v.zone, :key => v.zone.key, :secret => v.zone.secret, :volume => v)
+          if vcloud.deletevolume
+            log("destroying " + v.id.to_s)
+             db { v.destroy }
+          end
+        rescue => e
+          if again
+             again = false
+             sleep 3
+             retry
+          end
         end
       when "loadbalancer"
         l = db { Loadbalancer.find(y[:objectid]) }
-        lcloud = Oecloud.new(:zone => l.zone, :key => l.zone.key, :secret => l.zone.secret, :loadbalancer => l)
-        if lcloud.deleteloadbalancer
-          db { l.destroy }
-        end
+        again = true
+        begin
+          lcloud = Oecloud.new(:zone => l.zone, :key => l.zone.key, :secret => l.zone.secret, :loadbalancer => l)
+          if lcloud.deleteloadbalancer
+            db { l.destroy }
+          end
+        rescue => e
+          if again
+	     again = false
+	     sleep 3
+	     retry
+          end
+	end
       when "rule"
         r = db { Rule.find(y[:objectid]) }
-        rcloud = Oecloud.new(:zone => r.firewall.zone, :key => r.firewall.zone.key, :secret => r.firewall.zone.secret, :firewall => r.firewall, :rule => r)
-        if rcloud.revokesecuritygroupingress
-          log("destroying " + r.id.to_s)
+        again = true
+        begin
+          rcloud = Oecloud.new(:zone => r.firewall.zone, :key => r.firewall.zone.key, :secret => r.firewall.zone.secret, :firewall => r.firewall, :rule => r)
+          if rcloud.revokesecuritygroupingress
+            log("destroying " + r.id.to_s)
                 db { r.destroy }
-        else 
-          log("rule remained " + r.id.to_s)
-        end
+          end
+        rescue => e
+          if again
+	     again = false
+	     sleep 3
+	     retry
+	  end
+	end
       when "keypair"
          k = db { Keypair.find(y[:objectid]) }
-         kcloud = Oecloud.new(:zone => k.zone, :key => k.zone.key, :secret => k.zone.secret, :keypair => k)
-         if kcloud.deletekeypair
-           log("destroying " + y[:object].to_s + " " + k.name.to_s ) if @dg
-           db { k.destroy }
-         else
-           log("key remained" + k.id.to_s)
-         end
+	 again = true
+	 begin
+           kcloud = Oecloud.new(:zone => k.zone, :key => k.zone.key, :secret => k.zone.secret, :keypair => k)
+           if kcloud.deletekeypair
+             log("destroying " + y[:object].to_s + " " + k.name.to_s ) if @dg
+             db { k.destroy }
+           end
+	 rescue => e
+	   if again 
+	      again = false
+	      sleep 3
+	      retry
+	   end
+	 end
 
       when "ips"
       when "infrastructure"
          i = db { Infrastructure.find(y[:objectid]) }
 	 log("Destroying resources of infrastructre #{i.name}")
          i.servers.each do |s|
-           scloud = Oecloud.new(:zone => s.zone, :key => s.zone.key, :secret => s.zone.secret, :image => s.image, :offer => s.offer, :firewall => s.firewall, :server => s)
-           scloud.terminateinstances
-           db { s.destroy } 
-	   log("Destroying servers resources of infrastructre #{i.name}")
+ 	   again = true
+	   begin
+             scloud = Oecloud.new(:zone => s.zone, :key => s.zone.key, :secret => s.zone.secret, :image => s.image, :offer => s.offer, :firewall => s.firewall, :server => s)
+             if scloud.terminateinstances
+               db { s.destroy } 
+	       log("Destroying servers resources of infrastructre #{i.name}")
+	     end
+	   rescue => e
+	     if again
+	  	again = false
+	  	sleep 3
+		retry
+	     end
+	   end
 	   sleep 1
          end
          i.volumes.each do |v|
-           vcloud = Oecloud.new(:zone => v.zone, :key => v.zone.key, :secret => v.zone.secret, :volume => v)
-           vcloud.deletevolume
-           db { v.destroy }
-	   log("Destroying volumes resources of infrastructre #{i.name}")
+	   again = true
+	   begin
+             vcloud = Oecloud.new(:zone => v.zone, :key => v.zone.key, :secret => v.zone.secret, :volume => v)
+             if vcloud.deletevolume
+               db { v.destroy }
+	       log("Destroying volumes resources of infrastructre #{i.name}")
+	     end
+	   rescue => e
+	     if again
+		again = false
+		sleep 3
+		retry
+	     end
+	   end
 	   sleep 1
          end
          i.firewalls.each do |f|
-           fcloud = Oecloud.new(:zone => f.zone, :key => f.zone.key, :secret => f.zone.secret, :firewall => f)
-           fcloud.deletesecuritygroup
-           db { f.destroy }
-	   log("Destroying firewalls resources of infrastructre #{i.name}")
+	   again = true
+	   begin
+             fcloud = Oecloud.new(:zone => f.zone, :key => f.zone.key, :secret => f.zone.secret, :firewall => f)
+             if fcloud.deletesecuritygroup
+               db { f.destroy }
+	       log("Destroying firewalls resources of infrastructre #{i.name}")
+	     end
+	   rescue => e
+	     if again
+		again = false
+	 	sleep 3
+		retry
+	     end
+	   end
 	   sleep 1
          end
          i.keypairs.each do |k|
-           kcloud = Oecloud.new(:zone => k.zone, :key => k.zone.key, :secret => k.zone.secret, :keypair => k)
-           kcloud.deletekeypair
-           db { k.destroy }
-	   log("Destroying keypair resources of infrastructre #{i.name}")
+	   again = true
+	   begin
+             kcloud = Oecloud.new(:zone => k.zone, :key => k.zone.key, :secret => k.zone.secret, :keypair => k)
+             if kcloud.deletekeypair
+               db { k.destroy }
+	       log("Destroying keypair resources of infrastructre #{i.name}")
+	     end
+	   rescue => e
+	     if again
+		again = false
+	  	sleep 3
+		retry
+	     end
+	   end
 	   sleep 1
          end
     end
@@ -490,9 +586,18 @@ class Worker
     case y[:object].to_s
       when "server"
         s = db { Server.find(y[:objectid]) }
-        scloud = Oecloud.new(:zone => s.zone, :key => s.zone.key, :secret => s.zone.secret, :server => s)
-        s.ip, s.status, s.fqdn = scloud.describeinstances()
-        db { s.save }
+	again = true
+	begin
+          scloud = Oecloud.new(:zone => s.zone, :key => s.zone.key, :secret => s.zone.secret, :server => s)
+          s.ip, s.status, s.fqdn = scloud.describeinstances()
+          db { s.save }
+	rescue => e
+	  if again
+	     again = false
+	     sleep 3
+	     retry
+	  end
+	end
     end
   end
 
