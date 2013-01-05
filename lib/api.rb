@@ -127,16 +127,12 @@ get '/metadata' do
     log("API - got key for account - " + act.id.to_s)
     if db { Oeencrypt::decryptQuery(params,act.secret,act.key) } and params[:action] == "download"
       if params[:action] == "download"
-        log("THE FUCKER NEVER GOT HERE")
         case URI.unescape(params[:type])
           when "server"
              db { act.servers.find_by_serial(params[:server]).metadata }
-             log("LOOKING FOR FUCKING METADATA FROM SERVER")
           when "role"
-             log("LOOKING FOR FUCKING METADATA FROM ROLE")
              db { act.servers.find_by_serial(params[:server]).roles.find_by_serial(params[:role]).metadata }
           when "deployment"
-             log("LOOKING FOR FUCKING METADATA FROM DEPLOYMENT")
              db { act.servers.find_by_serial(params[:server]).deployments.find_by_serial(params[:deployment]).metadata }
         end
       end
