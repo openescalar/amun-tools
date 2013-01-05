@@ -102,48 +102,25 @@ class Worker
     end
   end
 
-#   def import(y)
-#    case y[:object]
-#     when "zone"
-#	z = Zone.find(y[:objectid])
-#        cloud = Oecloud.new(:zone => z, :key => z.key, :secret => z.secret)
-#
-#        i = cloud.describeimages
-#        i.each { |img| Image.create(:serial => img[:id], :description => img[:description], :arch => img[:arch], :zone_id => z.id, :account_id => z.account_id) } if i
-#
-#        f = cloud.describesecuritygroups
-#        f.each { |fw| fw1 = Firewall.create(:serial => fw[:id], :description => fw[:description], :name => fw[:name], :zone_id => z.id, :account_id => z.account_id)
-#	  r = cloud.describerules(fw1.serial)
-#          r.each { |r1|
-#              Rule.create(:fromport => r1[:fromport], :toport => r1[:toport], :source => r1[:source], :protocol => r1[:protocol], :firewall_id => fw1.id, :account_id => z.account_id) if not r1[:source].nil? 
-#  	    } if r
-#          } if f
-#
-#        #l = cloud.describeloadbalancers
-#        #l.each do |lb|
-#        #  Loadbalancer.create(:serial => lb["id"], :description => lb["description"], :port => lb["port"], :serverport => lb["serverport"], :protocol => lb["protocol"], :zone_id => z.id, :azone_id => lb["availability"], :account_id => z.account_id)
-#        #end
-#
-#        #s = z.describeinstances
-#        #s.each do |serv|
-##	#  img = Image.where("serial = ? and account_id = ?", serv["image"],z.account_id)
-##	#  lb = Loadbalancer.where("serial = ? and account_id = ?", serv["loadbalancer"], z.account_id)
-#        #  fw = Firewall.where("serial = ? and account_id = ?", serv["firewall"],z.account_id)
-#        #  Server.create(:serial => serv["id"], :fqdn => serv["fqdn"], :ip => serv["public"], :pip => serv["private"], :zone_id => z.id, :azone_id => serv["availability"], :offer_id  => serv["offer"], :image_id => img.id, :loadbalancer_id => lb.id, :firewall_id => fw.id)
-#        #end
-#
-#        v = cloud.describevolumes
-##        v.each { |vol| Volume.create(:serial => vol[:id], :description => vol[:description], :size => vol[:size], :zone_id => z.id, :azone_id => vol[:availability], :account_id => z.account_id) } if v
-#    end
-#  end
-
   def create(y)
     log("Creating " + y[:object].to_s ) if @dg
     case y[:object]
       when "server"
         s = db { Server.find(y[:objectid]) }
-        scloud = Oecloud.new(:zone => s.zone, :key => s.zone.key, :secret => s.zone.secret, :image => s.image, :offer => s.offer, :firewall => s.firewall, :keypair => s.keypair, :server => s)
-        s.serial = scloud.runinstances
+        again = true
+        begin
+          scloud = Oecloud.new(:zone => s.zone, :key => s.zone.key, :secret => s.zone.secret, :image => s.image, :offer => s.offer, :firewall => s.firewall, :keypair => s.keypair, :server => s)
+          s.serial = scloud.runinstances
+        rescue => e
+          if again 
+             s.serial = nil
+             again = false
+             sleep 3
+             retry
+          else
+             raise
+          end
+        end
         if s.serial 
           log("saving " + y[:object].to_s + " " + s.serial.to_s ) if @dg
           db { s.save }
@@ -153,8 +130,20 @@ class Worker
         end
       when "firewall"
         f = db { Firewall.find(y[:objectid]) }
-        fcloud = Oecloud.new(:zone => f.zone, :key => f.zone.key, :secret => f.zone.secret, :firewall => f)
-        f.serial = fcloud.createsecuritygroup
+        again = true
+        begin 
+          fcloud = Oecloud.new(:zone => f.zone, :key => f.zone.key, :secret => f.zone.secret, :firewall => f)
+          f.serial = fcloud.createsecuritygroup
+        rescue => e
+          if again
+             f.serial = nil
+             again = false
+             sleep 3
+             retry
+          else
+             raise
+          end
+        end
         if f.serial
           log("saving " + y[:object].to_s + " " + f.serial.to_s ) if @dg
           db { f.save }
@@ -164,8 +153,20 @@ class Worker
         end
       when "volume"
         v = db { Volume.find(y[:objectid]) }
-        vcloud = Oecloud.new(:zone => v.zone, :key => v.zone.key, :secret => v.zone.secret, :volume => v)
-        v.serial = vcloud.createvolume
+        again = true
+        begin
+          vcloud = Oecloud.new(:zone => v.zone, :key => v.zone.key, :secret => v.zone.secret, :volume => v)
+          v.serial = vcloud.createvolume
+        rescue => e
+          if again
+             v.serial = nil
+             again = false
+             sleep 3
+             retry
+          else
+             raise
+          end
+        end
         if v.serial
           log("saving " + y[:object].to_s + " " + v.serial.to_s ) if @dg
           db { v.save }
@@ -180,8 +181,20 @@ class Worker
         db { l.save }
       when "rule"
         r = db { Rule.find(y[:objectid]) }
-        rcloud = Oecloud.new(:zone => r.firewall.zone, :key => r.firewall.zone.key, :secret => r.firewall.zone.secret, :firewall => r.firewall, :rule => r)
-        rserial = rcloud.authorizedsecuritygroupingress
+        again = true
+        begin
+          rcloud = Oecloud.new(:zone => r.firewall.zone, :key => r.firewall.zone.key, :secret => r.firewall.zone.secret, :firewall => r.firewall, :rule => r)
+          rserial = rcloud.authorizedsecuritygroupingress
+        rescue => e
+          if again
+             rserial = false
+             again = false
+             sleep 3 
+             retry
+          else
+             raise
+          end
+        end
         if not rserial
                 log("destroying " + y[:object].to_s + " " + r.id.to_s )
                 db { r.destroy }
@@ -192,8 +205,20 @@ class Worker
         end
       when "keypair"
          k = db { Keypair.find(y[:objectid]) }
-         kcloud = Oecloud.new(:zone => k.zone, :key => k.zone.key, :secret => k.zone.secret, :keypair => k)
-         k.private = kcloud.createkeypair
+         again = true
+         begin
+           kcloud = Oecloud.new(:zone => k.zone, :key => k.zone.key, :secret => k.zone.secret, :keypair => k)
+           k.private = kcloud.createkeypair
+         rescue => e
+           if again
+              k.private = nil
+              again = false
+              sleep 3
+              retry 
+           else
+              raise
+           end
+         end
          if k.private 
            log("saving " + y[:object].to_s + " " + k.name.to_s ) if @dg
            db { k.save } 
@@ -207,37 +232,123 @@ class Worker
          i = db { Infrastructure.find(y[:objectid]) }
 	 log("Creating infrastructure #{i.name}")
          i.keypairs.each do |k|
-           kcloud = Oecloud.new(:zone => k.zone, :key => k.zone.key, :secret => k.zone.secret, :keypair => k)
-           k.private = kcloud.createkeypair
-           db { k.save }
-	   log("Creating keypair under infrastructure #{i.name}")
+           again = true
+           begin
+             kcloud = Oecloud.new(:zone => k.zone, :key => k.zone.key, :secret => k.zone.secret, :keypair => k)
+             k.private = kcloud.createkeypair
+           rescue => e
+             if again
+                k.private = nil
+                again = false
+		sleep 3
+		retry
+	     else
+                raise
+	     end
+           end
+	   if k.private 
+             db { k.save }
+	     log("Creating keypair under infrastructure #{i.name}")
+           else
+	     db { k.destroy }
+	     log("Couldn't create keypair, removing record from database ")
+ 	   end
 	   sleep 1
          end
          i.firewalls.each do |f|
-           fcloud = Oecloud.new(:zone => f.zone, :key => f.zone.key, :secret => f.zone.secret, :firewall => f)
-           f.serial = fcloud.createsecuritygroup
-           db { f.save }
-	   log("Creating firewall under infrastructure #{i.name}")
+	   again = true
+	   begin
+             fcloud = Oecloud.new(:zone => f.zone, :key => f.zone.key, :secret => f.zone.secret, :firewall => f)
+             f.serial = fcloud.createsecuritygroup
+           rescue => e
+	     if again
+		f.serial = nil
+		again = false
+		sleep 3
+		retry
+	     else
+		raise
+	     end
+	   end
+	   if f.serial
+	     db { f.save }
+	     log("Creating firewall under infrastructure #{i.name}")
+	   else
+	     db { f.destroy }
+	     log("Couldn't create firewall, removing record from the databse ")
+	   end
 	   sleep 1
          end
          i.rules.each do |r|
-           rcloud = Oecloud.new(:zone => r.firewall.zone, :key => r.firewall.zone.key, :secret => r.firewall.zone.secret, :firewall => r.firewall, :rule => r)
-           db { r.destroy } if not rcloud.authorizedsecuritygroupingress
-	   log("Creating rule under infrastructure #{i.name}")
+	   again = true
+	   begin
+             rcloud = Oecloud.new(:zone => r.firewall.zone, :key => r.firewall.zone.key, :secret => r.firewall.zone.secret, :firewall => r.firewall, :rule => r)
+	     r = rcloud.authorizedsecuritygroupingress
+ 	   rescue => e
+	     if again
+		r = false
+		again = false
+		sleep 3
+		retry
+	     else
+		raise
+	     end
+	   end
+	   if r
+	     db { r.save } 
+	     log("Creating rule under infrastructure #{i.name}")
+	   else
+	     db { r.destroy }
+	     log("Couldn't create rule, removing record from database ")
+	   end
 	   sleep 1
          end
          i.volumes.each do |v|
-           vcloud = Oecloud.new(:zone => v.zone, :key => v.zone.key, :secret => v.zone.secret, :volume => v)
-           v.serial = vcloud.createvolume
-           db { v.save } if v.serial
-	   log("Creating volume under infrastructure #{i.name}")
+	   again = true
+	   begin
+             vcloud = Oecloud.new(:zone => v.zone, :key => v.zone.key, :secret => v.zone.secret, :volume => v)
+             v.serial = vcloud.createvolume
+	   rescue => e
+	     if again
+		v.serial = nil
+		again = false
+		sleep 3
+		retry
+	     else
+		raise
+	     end
+	   end
+	   if v.serial
+	      db { v.save }
+	      log("Creating volume under infrastructure #{i.name}")
+	   else
+	      db { v.destroy }
+	      log("Couldn't create volume, removing record from database")
+	   end
 	   sleep 1
          end
          i.servers.each do |s|
-           scloud = Oecloud.new(:zone => s.zone, :key => s.zone.key, :secret => s.zone.secret, :image => s.image, :offer => s.offer, :firewall => s.firewall, :keypair => s.keypair, :server => s)
-           s.serial = scloud.runinstances
-           db { s.save } if s.serial
-	   log("Creating server under infrastructure #{i.name}")
+	   again = true
+	   begin
+             scloud = Oecloud.new(:zone => s.zone, :key => s.zone.key, :secret => s.zone.secret, :image => s.image, :offer => s.offer, :firewall => s.firewall, :keypair => s.keypair, :server => s)
+             s.serial = scloud.runinstances
+	   rescue => e
+	     if again
+		s.serial = nil
+		again = false
+		sleep 3
+		retry
+	     else
+		raise
+	     end
+	   end
+	   if s.serial
+	     db { s.save }
+	     log("Creating server under infrastructure #{i.name}")
+	   else
+	     db { s.destroy }
+	     log("Counldn't create server, removing record from database")
+	   end
 	   sleep 1
          end
     end

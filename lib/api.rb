@@ -9,7 +9,6 @@ require 'uri'
 gem 'multi_json', '1.0.3'
 #Loading libs
 %w{ oecompiler oedist oedsl oeencrypt awsapi osapi eucaapi hpos rsapi }.each { |x| require "/opt/openescalar/amun-tools/lib/amun/lib/#{x}.rb" }
-#Dir["/opt/openescalar/amun-tools/lib/amun/lib/*.rb"].each {|file| require file }
 #Loading models
 Dir["/opt/openescalar/amun-tools/lib/amun/app/models/*.rb"].each {|file| require file }
 
@@ -100,8 +99,10 @@ get '/bridge' do
   if act
     if Oeencrypt::decryptQuery(params,act.secret,act.key)
       case URI.unescape(params[:action])
-        when ""
-        when ""
+        when "register"
+        when "connect"
+        when "disconnect"
+        when "status"
       end
     end
   end
