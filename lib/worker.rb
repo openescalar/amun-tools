@@ -617,7 +617,7 @@ class Worker
            again = false
         when "pending", "build"
            sleep 120
-           retry
+           raise
         else
            again = false
       end
