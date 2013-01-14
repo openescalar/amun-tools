@@ -87,6 +87,8 @@ class Worker
                 sendtask(m) 
              when "get"
                 get(m)
+	     when "installclient"
+	        installclient(m)
           end
         end
         sleep 1
@@ -589,7 +591,7 @@ class Worker
 	again = true
 	begin
           scloud = Oecloud.new(:zone => s.zone, :key => s.zone.key, :secret => s.zone.secret, :server => s)
-          s.ip, s.status, s.fqdn = scloud.describeinstances()
+          s.ip, s.status, s.fqdn = scloud.getserverstatus()
           db { s.save }
 	rescue => e
 	  if again
@@ -598,6 +600,34 @@ class Worker
 	     retry
 	  end
 	end
+    end
+  end
+
+  def installclient(y)
+    s = db { Server.find(y[:objectid]) }
+    again = true
+    begin
+      scloud = Oecloud.new(:zone => s.zone, :key => s.zone.key, :secret => s.zone.secret, :server => s)
+      ip, status, fqdn = scloud.getserverstatus()
+      case status.to_s.downcase
+        when "running", "active"
+           %x[echo "#{s.keypair.private}" > /tmp/#{fqdn}-#{ip} ; chmod 400 /tmp/#{fqdn}-#{ip} ; ]
+           %x[ssh -i /tmp/#{fqdn}-#{ip} root@#{ip} "wget -O /tmp/install.sh http://www.openescalar.org/download/install.sh ; sh /tmp/install.sh" ]
+           sleep 120
+           again = false
+        when "pending", "build"
+           sleep 120
+           retry
+        else
+           again = false
+      end
+    rescue => e
+      if again
+        sleep 3
+        retry
+      else
+        again = false
+      end
     end
   end
 
