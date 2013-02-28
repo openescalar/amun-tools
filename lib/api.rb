@@ -1,5 +1,4 @@
 #!/opt/ruby/bin/ruby
-#require '/opt/openescalar/amun-tools/lib/amun/config/environment.rb'
 require 'zmq'
 require 'yaml'
 require 'syslog'
@@ -11,6 +10,16 @@ gem 'multi_json', '1.0.3'
 %w{ oecompiler oedist oedsl oeencrypt awsapi osapi eucaapi hpos rsapi }.each { |x| require "/opt/openescalar/amun-tools/lib/amun/lib/#{x}.rb" }
 #Loading models
 Dir["/opt/openescalar/amun-tools/lib/amun/app/models/*.rb"].each {|file| require file }
+
+##### All are crud operations
+# /task
+# /ping
+# /olb
+# /ovpn
+# /odns
+# /metadata
+# /event
+# /escalar
 
 
 def log(message)
@@ -24,131 +33,179 @@ def db(&block)
   ActiveRecord::Base.connection_pool.with_connection &block
 end
 
+def checkKey(p)
+  log("API - Looking for key " + p[:key])
+  if params[:key]
+    db { Account.find_by_key(URI.unescape(p[:key])) }
+  else
+    false
+  end
+end
+
 get '/' do
   404
 end
 
 get '/task' do
-  act = db { Account.find_by_key(URI.unescape(params[:key])) } if params[:key]
-  log("API - Looking for key " + params[:key])
-  if act
-    log("API - got key for account - " + act.id.to_s)
+  if checkKey(p)
     if db { Oeencrypt::decryptQuery(params,act.secret,act.key) }
       case URI.unescape(params[:action])
-        when "gettask"
-          log("Getting tasks " + params[:task].to_s )
+        when "get"
           db { act.roletasks.find_by_serial(params[:task]).content }
-        when "updatetask"
-	  log("Updating Event Task")
-          db { e = Event.find_by_ident(params[:ident]) 
-               e.status = params[:code]
-               e.output = URI.unescape(params[:output])
-               e.save }
+        when "create"
+        when "update"
+        when "delete"
       end
     else
-      log("error on encryption")
+      log("Error on encryption")
     end
   end
 end
 
-get '/builder' do
-  act = db { Account.find_by_key(URI.unescape(params[:key])) } if params[:key]
-  log("API - Looking for key " + params[:key])
-  if act
-    log("API - got key for account - " + act.id.to_s)
+get '/ping' do
+  if checkKey(p)
     if db { Oeencrypt::decryptQuery(params,act.secret,act.key) }
       case URI.unescape(params[:action])
-        when "build"
-          log("Building server")
-	  contxt = ZMQ::Context.new
-          toCoor = contxt.socket(ZMQ::DOWNSTREAM)
-          toCoor.connect("tcp://*:12345")
-          srvserial = db { act.servers.find_by_serial(params[:serial]).serial }
-          if srvserial
-            msg = {:action => "build", :object => "server", :serial => srvserial }.to_yaml
-            toCoor.send(msg)
-          end
-          toCoor.close
-      end
-    else
-      log("API - Error on encryption")
-    end
-  end
-end
-
-get '/pingme' do
-  act = db { Account.find_by_key(URI.unescape(params[:key])) } if params[:key]
-  log("API - Looking for key " + params[:key])
-  if act
-    log("API - got key for account - " + act.id.to_s)
-    if db { Oeencrypt::decryptQuery(params,act.secret,act.key) }
-      case URI.unescape(params[:action])
-        when "ping"
-        log "Ping from server #{params[:server]}"
+        when "get"
+        when "create"
+        when "update"
         db { act.servers.find_by_serial(params[:server]).touch } 
         db { act.servers.find_by_serial(params[:server]).send_get } 
+        when "delete"
       end
     else
-      log("error on encryption")
+      log("Error on encryption")
     end
   end
 end
 
-get '/bridge' do
-  act = Account.find_by_key(URI.unescape(params[:key])) if params[:key]
-  if act
-    if Oeencrypt::decryptQuery(params,act.secret,act.key)
+get '/olb' do
+  if checkKey(p)
+    if db { Oeencrypt::decryptQuery(params,act.secret,act.key) }
       case URI.unescape(params[:action])
-        when "register"
-        when "connect"
-        when "disconnect"
-        when "status"
+        when "get"
+        when "create"
+        when "update"
+        when "delete"
       end
+    else
+      log("Error on encryption")
     end
   end
 end
 
-get '/escalar' do
-  act = Account.find_by_key(URI.unescape(params[:key])) if params[:key]
-  if act
-    if Oeencrypt::decryptQuery(params,act.secret,act.key)
+get '/ovpn' do
+  if checkKey(p)
+    if db { Oeencrypt::decryptQuery(params,act.secret,act.key) }
       case URI.unescape(params[:action])
-        when ""
-        when ""
+        when "get"
+        when "create"
+        when "update"
+        when "delete"
       end
+    else
+      log("Error on encryption")
+    end
+  end
+end
+
+get '/odns' do
+  if checkKey(p)
+    if db { Oeencrypt::decryptQuery(params,act.secret,act.key) }
+      case URI.unescape(params[:action])
+        when "get"
+        when "create"
+        when "update"
+        when "delete"
+      end
+    else
+      log("Error on encryption")
     end
   end
 end
 
 get '/metadata' do
-  act = db { Account.find_by_key(URI.unescape(params[:key])) } if params[:key]
-  log("API - Looking for key " + params[:key])
-  if act
-    log("API - got key for account - " + act.id.to_s)
-    if db { Oeencrypt::decryptQuery(params,act.secret,act.key) } and params[:action] == "download"
-      if params[:action] == "download"
-        case URI.unescape(params[:type])
-          when "server"
-             db { act.servers.find_by_serial(params[:server]).metadata }
-          when "role"
-             db { act.servers.find_by_serial(params[:server]).roles.find_by_serial(params[:role]).metadata }
-          when "deployment"
-             db { act.servers.find_by_serial(params[:server]).deployments.find_by_serial(params[:deployment]).metadata }
-        end
+  if checkKey(p)
+    if db { Oeencrypt::decryptQuery(params,act.secret,act.key) }
+      case URI.unescape(params[:action])
+        when "get"
+          case URI.unescape(params[:type])
+            when "server"
+               db { act.servers.find_by_serial(params[:server]).metadata }
+            when "role"
+               db { act.servers.find_by_serial(params[:server]).roles.find_by_serial(params[:role]).metadata }
+            when "deployment"
+               db { act.servers.find_by_serial(params[:server]).deployments.find_by_serial(params[:deployment]).metadata }
+          end
+        when "create"
+        when "update"
+        when "delete"
       end
     else
-      log("error on encryption")
+      log("Error on encryption")
     end
   end
 end
 
-get '/dns' do
-  act = Account.find_by_key(URI.unescape(params[:key])) if params[:key]
-  if act
-    if Oeencrypt::decryptQuery(params,act.secret,act.key) 
+get '/event' do
+  if checkKey(p)
+    if db { Oeencrypt::decryptQuery(params,act.secret,act.key) }
+      case URI.unescape(params[:action])
+        when "get"
+        when "create"
+        when "update"
+          db { e = Event.find_by_ident(params[:ident]) 
+               e.status = params[:code]
+               e.output = URI.unescape(params[:output])
+               e.save }
+        when "delete"
+      end
+    else
+      log("Error on encryption")
     end
   end
 end
+
+get '/escalar' do
+  if checkKey(p)
+    if db { Oeencrypt::decryptQuery(params,act.secret,act.key) }
+      case URI.unescape(params[:action])
+        when "get"
+        when "create"
+        when "update"
+        when "delete"
+      end
+    else
+      log("Error on encryption")
+    end
+  end
+end
+
+
+#get '/builder' do
+#  act = db { Account.find_by_key(URI.unescape(params[:key])) } if params[:key]
+#  log("API - Looking for key " + params[:key])
+#  if act
+#    log("API - got key for account - " + act.id.to_s)
+#    if db { Oeencrypt::decryptQuery(params,act.secret,act.key) }
+#      case URI.unescape(params[:action])
+#        when "build"
+#          log("Building server")
+#	  contxt = ZMQ::Context.new
+#          toCoor = contxt.socket(ZMQ::DOWNSTREAM)
+#          toCoor.connect("tcp://*:12345")
+#          srvserial = db { act.servers.find_by_serial(params[:serial]).serial }
+#          if srvserial
+#            msg = {:action => "build", :object => "server", :serial => srvserial }.to_yaml
+#            toCoor.send(msg)
+#          end
+#          toCoor.close
+#      end
+#    else
+#      log("API - Error on encryption")
+#    end
+#  end
+#end
 
 get '*' do
   404
