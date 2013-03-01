@@ -55,6 +55,7 @@ get '/task' do
         when "create"
         when "update"
         when "delete"
+        when "build"
       end
     else
       log("Error on encryption")
